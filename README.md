@@ -1,4 +1,5 @@
-# InkyPi 
+# InkyPi for  Raspberry Pi Zero PhotoPainter
+7.3inch E Ink Spectra 6 (E6) Full Color E-Paper Display
 
 <img src="./docs/images/inky_clock.jpg" />
 
