@@ -1,6 +1,10 @@
 # InkyPi for  Raspberry Pi Zero PhotoPainter
 7.3inch E Ink Spectra 6 (E6) Full Color E-Paper Display
 
+Add  epd7in3e.py and epdconfig.py  from https://github.com/waveshareteam/e-Paper
+fixed PWR_PIN = 18 → PWR_PIN = 27 (epdconfig.py)
+
+install -  sudo bash install/install.sh -W epd7in3e
 
 https://github.com/fatihak/InkyPi
 <hr />

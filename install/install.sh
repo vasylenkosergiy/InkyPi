@@ -361,7 +361,8 @@ check_permissions
 stop_service
 # fetch the WS display driver if defined.
 if [[ -n "$WS_TYPE" ]]; then
-  fetch_waveshare_driver
+  echo "skipping fetch of Waveshare driver. Use preintalled driver for $WS_TYPE"
+  # fetch_waveshare_driver
 fi
 enable_interfaces
 install_debian_dependencies
