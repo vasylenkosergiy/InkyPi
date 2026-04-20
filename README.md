@@ -3,6 +3,8 @@
 
 <img src="./docs/images/inky_clock.jpg" />
 
+<hr />
+https://github.com/fatihak/InkyPi
 
 ## About InkyPi 
 InkyPi is an open-source, customizable E-Ink display powered by a Raspberry Pi. Designed for simplicity and flexibility, it allows you to effortlessly display the content you care about, with a simple web interface that makes setup and configuration effortless.
