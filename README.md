@@ -3,6 +3,7 @@
 
 
 Add  epd7in3e.py and epdconfig.py  from https://github.com/waveshareteam/e-Paper
+
 fixed PWR_PIN = 18 → PWR_PIN = 27 (epdconfig.py)
 
 *Install
