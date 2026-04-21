@@ -6,8 +6,10 @@ Add  epd7in3e.py and epdconfig.py  from https://github.com/waveshareteam/e-Paper
 fixed PWR_PIN = 18 → PWR_PIN = 27 (epdconfig.py)
 
 install -  
-git clone https://github.com/vasylenkosergiy/InkyPi.git
+git clone https://github.com/vasylenkosergiy/InkyPi.git 
+
 cd InkyPi
+
 sudo bash install/install.sh -W epd7in3e
 
 https://github.com/fatihak/InkyPi
