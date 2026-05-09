@@ -7,6 +7,7 @@ import hashlib
 import tempfile
 import subprocess
 import shutil
+import glob
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ def compute_image_hash(image):
 
 def take_screenshot_html(html_str, dimensions, timeout_ms=None):
     image = None
+    for f in glob.glob("/tmp/.com.google.Chrome*") + glob.glob("/tmp/chromium*"):
+        try: shutil.rmtree(f, ignore_errors=True)
+        except: pass
     try:
         # Create a temporary HTML file
         with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as html_file:
@@ -158,6 +162,7 @@ def take_screenshot(target, dimensions, timeout_ms=None):
         # Check if the process failed or the output file is missing
         if result.returncode != 0 or not os.path.exists(img_file_path):
             logger.error(f"Failed to take screenshot (return code: {result.returncode})")
+            logger.error(f"Chromium stderr: {result.stderr.decode('utf-8', errors='replace')}")
             return None
 
         # Load the image using PIL
