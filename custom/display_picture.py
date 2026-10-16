@@ -10,9 +10,9 @@ from PIL import Image
 # cv2, numpy та inky імпортуються лише коли справді потрібні (не для --weather),
 # див. блок нижче в __main__.
 
-sys.path.append('/home/serhii/PaperPiAI/waveshare_epd')  # шлях до бібліотеки
+ 
 
-from waveshare_epd import epd7in3e
+import epd7in3e
 
 import weather_picture
 
