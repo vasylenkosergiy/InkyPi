@@ -5,10 +5,10 @@
 import argparse
 import sys
 
-import cv2
-from inky.auto import auto
-import numpy as np
 from PIL import Image
+
+# cv2, numpy та inky імпортуються лише коли справді потрібні (не для --weather),
+# див. блок нижче в __main__.
 
 sys.path.append('/home/serhii/PaperPiAI/waveshare_epd')  # шлях до бібліотеки
 
@@ -144,6 +144,11 @@ if __name__ == "__main__":
         if not simulate_display:
             display_waveshare(img, resize=False)
         sys.exit(0)
+
+    # Далі потрібні OpenCV, numpy та Inky (тільки для звичайних картинок)
+    import cv2
+    import numpy as np
+    from inky.auto import auto
 
     disp_w, disp_h = args["width"], args["height"]
 
