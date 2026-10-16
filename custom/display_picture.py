@@ -10,7 +10,7 @@ from PIL import Image
 # cv2, numpy та inky імпортуються лише коли справді потрібні (не для --weather),
 # див. блок нижче в __main__.
  
-sys.path.append('/home/serhii/InkyPi/src/display/waveshare_epd')  # шлях до бібліотеки
+sys.path.append('/home/serhii/InkyPi/src/display')  # шлях до бібліотеки
 
 from waveshare_epd import epd7in3e
 
