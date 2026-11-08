@@ -1,0 +1,5 @@
+crontab -e
+
+
+*/30 * * * * cd /home/serhii/InkyPi/custom && /usr/bin/python3 display_picture.py --weather >> /home/serhii/weather.log 2>&1
+@reboot sleep 60 && cd /home/serhii/InkyPi/custom && /usr/bin/python3 display_picture.py --weather >> /home/serhii/weather.log 2>&1

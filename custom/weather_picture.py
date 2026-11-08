@@ -9,9 +9,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -46,7 +47,7 @@ def get_data() -> dict:
         "latitude": LATITUDE,
         "longitude": LONGITUDE,
         "daily": "temperature_2m_min,temperature_2m_max,sunrise,sunset,weather_code",
-        "hourly": "temperature_2m,weather_code,precipitation_probability",
+        "hourly": "temperature_2m,weather_code,precipitation_probability,surface_pressure,pressure_msl",
         "current": ",".join([
             "temperature_2m", "apparent_temperature", "precipitation", "rain",
             "showers", "snowfall", "weather_code", "cloud_cover", "wind_speed_10m",
@@ -55,6 +56,7 @@ def get_data() -> dict:
         "timezone": "auto",
         "wind_speed_unit": "kmh",
         "forecast_days": 8,  # сьогодні + 7 днів прогнозу
+        "past_days": 1,      # вчора — потрібен для тенденції тиску
     }
     r = requests.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=30)
     r.raise_for_status()
@@ -78,6 +80,7 @@ class Hour:
     temp: float | None
     code: int | None
     precip: float | None
+    pressure: float | None = None
 
 
 @dataclass
@@ -110,12 +113,14 @@ class Parsed:
         ]
 
         h = data["hourly"]
+        pressures = h.get(PRESSURE_KEY) or [None] * len(h["time"])
         hourly = [
             Hour(
                 time=datetime.fromisoformat(h["time"][i]),
                 temp=h["temperature_2m"][i],
                 code=h["weather_code"][i],
                 precip=h["precipitation_probability"][i],
+                pressure=pressures[i],
             )
             for i in range(len(h["time"]))
         ]
@@ -420,7 +425,7 @@ def draw_current_icon(img: Image.Image, parsed: Parsed, current_y: int) -> int:
     return 10 + 200
 
 
-def draw_current_temp(draw: ImageDraw.ImageDraw, parsed: Parsed, current_y: int, shift_x: int) -> None:
+def draw_current_temp(img: Image.Image, draw: ImageDraw.ImageDraw, parsed: Parsed, current_y: int, shift_x: int) -> None:
     cur = parsed.current
     font_size = 85
 
@@ -433,16 +438,17 @@ def draw_current_temp(draw: ImageDraw.ImageDraw, parsed: Parsed, current_y: int,
     write_string(draw, temp, font_size, BLUE, shift_x, TextFrom.LEFT, text_y)
     write_string(draw, "°", font_size, BLUE, shift_x + int(w) - 20, TextFrom.LEFT, text_y)
 
-    current_y += int(h)
+ 
 
     apparent = cur.get("apparent_temperature")
     if apparent is not None:
-        write_string(draw, f"feels like {to_degree(apparent)}", 18, ORANGE_RED,
-                     shift_x + 15, TextFrom.LEFT, current_y + 35)
+        draw_icon_text(img, draw,shift_x + int(w), current_y + int(h), ICON_PERSON, to_degree(apparent), "відчувається", 40)
 
+     #              shift_x + int(w), TextFrom.LEFT, current_y + int(h))
+    current_y += int(h)
     today = parsed.today
     write_string(draw, f"{to_degree(today.min_t)} - {to_degree(today.max_t)}", 18, BLACK,
-                 shift_x + 15, TextFrom.LEFT, current_y + 60)
+                 shift_x+5 , TextFrom.LEFT, current_y + 50)
 
 
 HPA_TO_MMHG = 0.750062
@@ -450,39 +456,123 @@ HPA_TO_MMHG = 0.750062
 # "pressure_msl" — приведений до рівня моря. Змініть за потреби.
 PRESSURE_KEY = "surface_pressure"
 
-COMPASS = ["Пн", "ПнСх", "Сх", "ПдСх", "Пд", "ПдЗх", "Зх", "ПнЗх"]
+def draw_arrow(img: Image.Image, cx: float, cy: float, radius: float, direction_deg: float,
+               circle: bool = True) -> None:
+    """Стрілка, що вказує в бік direction_deg (0 = вгору, 90 = вправо, за годинниковою)."""
+    angle = math.radians(direction_deg % 360)
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def rot(px: float, py: float) -> tuple[float, float]:
+        return ((cx + (px * cos_a - py * sin_a) * radius) * SS,
+                (cy + (px * sin_a + py * cos_a) * radius) * SS)
+
+    # малюємо на локальному збільшеному шарі для згладжування
+    pad = int(radius) + 4
+    x0, y0 = int(cx) - pad, int(cy) - pad
+    layer = Image.new("RGBA", (2 * pad * SS, 2 * pad * SS), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+
+    def to_local(p: tuple[float, float]) -> tuple[float, float]:
+        return (p[0] - x0 * SS, p[1] - y0 * SS)
+
+    # коло-компас
+    if circle:
+        center = to_local((cx * SS, cy * SS))
+        r_px = radius * SS
+        ld.ellipse([center[0] - r_px, center[1] - r_px, center[0] + r_px, center[1] + r_px],
+               outline=GRAY + (255,), width=SS)
+
+    # стрілка: древко + наконечник
+    tail = to_local(rot(0, 0.7))
+    base = to_local(rot(0, -0.35))
+    ld.line([tail, base], fill=BLACK + (255,), width=3 * SS)
+    head = [to_local(rot(0, -0.85)), to_local(rot(-0.4, -0.2)), to_local(rot(0.4, -0.2))]
+    ld.polygon(head, fill=BLACK + (255,))
+
+    layer = layer.resize((2 * pad, 2 * pad), Image.LANCZOS)
+    img.paste(layer, (x0, y0), layer)
 
 
-def compass_direction(degrees: float) -> str:
-    return COMPASS[int((degrees % 360) / 45 + 0.5) % 8]
+def draw_wind_arrow(img: Image.Image, cx: float, cy: float, radius: float, wind_from_deg: float) -> None:
+    """Стрілка показує, КУДИ дме вітер (open-meteo дає напрямок, ЗВІДКИ він дме)."""
+    draw_arrow(img, cx, cy, radius, wind_from_deg + 180, circle=True)
 
 
-def draw_extra_info(draw: ImageDraw.ImageDraw, parsed: Parsed) -> None:
+PRESSURE_TREND_HOURS = 3
+PRESSURE_TREND_THRESHOLD = 1.0  # hPa за 3 години
+
+
+def pressure_trend(parsed: Parsed) -> float | None:
+    """Зміна тиску (hPa) за останні 3 години або None, якщо даних немає."""
+    by_time = {h.time: h.pressure for h in parsed.hourly}
+    now_h = parsed.now.replace(minute=0, second=0, microsecond=0)
+    current = by_time.get(now_h)
+    previous = by_time.get(now_h - timedelta(hours=PRESSURE_TREND_HOURS))
+    if current is None or previous is None:
+        return None
+    return current - previous
+
+
+# Імена файлів іконок у папці eink — підставте свої, якщо називаються інакше
+ICON_PRESSURE = "pressure.png"
+ICON_WIND = "wind.png"
+ICON_SUNRISE = "sunrise.png"
+ICON_SUNSET = "sunset.png"
+ICON_PERSON = "person.png"
+
+def draw_icon_text(img: Image.Image, draw: ImageDraw.ImageDraw, x: float, y: float,
+                   icon_name: str, text: str, fallback_label: str,
+                   icon_size: int = 40, font_size: int = 18) -> float:
+    """Іконка + текст справа. Якщо іконки немає — малює текстовий підпис.
+    Повертає X, де закінчився текст."""
+    icon_path = ICONS_DIR / icon_name
+    if paste_icon(img, icon_path, x, y, icon_size):
+        text_x = x + icon_size + 4
+        w, h = measure(text, font_size)
+        write_string(draw, text, font_size, BLACK, text_x, TextFrom.LEFT, y + (icon_size - h) / 2)
+        return text_x + w
+    label = f"{fallback_label}: {text}"
+    w, h = measure(label, font_size)
+    write_string(draw, label, font_size, BLACK, x, TextFrom.LEFT, y + (icon_size - h) / 2)
+    return x + w
+
+
+def draw_extra_info(img: Image.Image, draw: ImageDraw.ImageDraw, parsed: Parsed) -> None:
     """Тиск, вітер, схід/захід сонця — у вільному місці справа від температури."""
     cur = parsed.current
     today = parsed.today
     x = 450
-    y = 95
-    step = 40
-    font_size = 18
+    y = 85
+    step = 45
+    icon_size = 40
 
     pressure = cur.get(PRESSURE_KEY)
     pressure_text = "n/a" if pressure is None else f"{round_away(pressure * HPA_TO_MMHG)} мм рт. ст."
-    write_string(draw, f"тиск: {pressure_text}", font_size, BLACK, x, TextFrom.LEFT, y)
+    end_x = draw_icon_text(img, draw, x, y, ICON_PRESSURE, pressure_text, "тиск", icon_size)
+
+    # тенденція тиску: ↑ росте, ↓ падає, → стабільний
+    delta = pressure_trend(parsed)
+    if delta is not None:
+        if delta > PRESSURE_TREND_THRESHOLD:
+            direction = 0
+        elif delta < -PRESSURE_TREND_THRESHOLD:
+            direction = 180
+    else:
+            direction = 90
+            draw_arrow(img, end_x + 22, y + icon_size / 2, 14, direction, circle=False)
 
     wind = cur.get("wind_speed_10m")
-    if wind is None:
-        wind_text = "n/a"
-    else:
-        wind_text = f"{round_away(wind)} км/год"
-        if cur.get("wind_direction_10m") is not None:
-            wind_text += f", {compass_direction(cur['wind_direction_10m'])}"
-    write_string(draw, f"вітер: {wind_text}", font_size, BLACK, x, TextFrom.LEFT, y + step)
+    wind_text = "n/a" if wind is None else f"{round_away(wind)} км/год"
+    end_x = draw_icon_text(img, draw, x, y + step, ICON_WIND, wind_text, "вітер", icon_size)
+
+    wind_dir = cur.get("wind_direction_10m")
+    if wind_dir is not None:
+        draw_wind_arrow(img, end_x + 28, y + step + icon_size / 2, 17, wind_dir)
 
     sunrise = f"{today.sunrise:%H:%M}" if today.sunrise else "n/a"
     sunset = f"{today.sunset:%H:%M}" if today.sunset else "n/a"
-    write_string(draw, f"схід: {sunrise}   захід: {sunset}", font_size, BLACK,
-                 x, TextFrom.LEFT, y + 2 * step)
+    end_x = draw_icon_text(img, draw, x, y + 2 * step, ICON_SUNRISE, sunrise, "схід", icon_size)
+    draw_icon_text(img, draw, end_x + 20, y + 2 * step, ICON_SUNSET, sunset, "захід", icon_size)
 
 
 def generate_picture(data: dict) -> Image.Image:
@@ -502,8 +592,8 @@ def generate_picture(data: dict) -> Image.Image:
 
     shift_x = draw_current_icon(img, parsed, current_y)
     current_y -= 40
-    draw_current_temp(draw, parsed, current_y, shift_x)
-    draw_extra_info(draw, parsed)
+    draw_current_temp(img, draw, parsed, current_y, shift_x)
+    draw_extra_info(img, draw, parsed)
 
     draw_forecast(img, draw, parsed)
     draw_diagram(img, draw, parsed)
