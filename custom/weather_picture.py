@@ -360,15 +360,18 @@ def draw_diagram(img: Image.Image, draw: ImageDraw.ImageDraw, parsed: Parsed) ->
 
     koef = 1 if delta_t == 0 else diagram_height / delta_t
 
-    def horizontal_marker(j: int) -> None:
+    def horizontal_marker(j: int, deltaD: int) -> None:
         yy = y - j * koef
         draw.line([(25, yy), (24 * size, yy)], fill=GRAY)
-        write_string(draw, to_degree(min_t + j), 8, BLACK, 2, TextFrom.LEFT, int(yy) - 10)
+        write_string(draw, to_degree(j), 8, BLACK, 2, TextFrom.LEFT, int(yy) - 10)
 
     for j in range(0, int(delta_t) + 1, 5):
-        horizontal_marker(j)
+        horizontal_marker(j, min_t)
     if delta_t < 5:
-        horizontal_marker(5)
+        koeff = koef
+        koef = diagram_height / max_t
+        horizontal_marker(max_t,0)
+        koef = koeff
 
     # вертикальні лінії та підписи годин
     for j in range(4, 24, 4):
@@ -557,9 +560,9 @@ def draw_extra_info(img: Image.Image, draw: ImageDraw.ImageDraw, parsed: Parsed)
             direction = 0
         elif delta < -PRESSURE_TREND_THRESHOLD:
             direction = 180
-    else:
+        else:
             direction = 90
-            draw_arrow(img, end_x + 22, y + icon_size / 2, 14, direction, circle=False)
+        draw_arrow(img, end_x + 22, y + icon_size / 2, 14, direction, circle=False)
 
     wind = cur.get("wind_speed_10m")
     wind_text = "n/a" if wind is None else f"{round_away(wind)} км/год"

@@ -173,3 +173,4 @@ mock_display_output/
 /src/static/scripts/
 /src/static/styles/
 /.vs
+/custom/.vs
